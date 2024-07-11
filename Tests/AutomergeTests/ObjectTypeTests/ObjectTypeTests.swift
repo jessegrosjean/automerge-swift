@@ -1,3 +1,4 @@
+import Combine
 @testable import Automerge
 import XCTest
 
@@ -28,9 +29,10 @@ class ObjectTypeTests: XCTestCase {
         let store = Document()
         let list = store.root.ensureList(key: "key")
         var receivedPatches: [Document.List.Patch] = []
-        let cancellable = list.patchePublisher.sink { patch in
+        var cancellables: Set<AnyCancellable> = []
+        list.patchPublisher.sink { patch in
             receivedPatches.append(patch)
-        }
+        }.store(in: &cancellables)
         list.replaceSubrange(0..<0, with: [.Int(1), .Int(2), .Int(3)])
         XCTAssertEqual(list.count, 3)
         XCTAssertEqual(list.elements, [.Scalar(.Int(1)), .Scalar(.Int(2)), .Scalar(.Int(3))])
@@ -44,9 +46,10 @@ class ObjectTypeTests: XCTestCase {
         let store = Document()
         let text = store.root.ensureText(key: "key")
         var receivedPatches: [Document.Text.Patch] = []
-        let cancellable = text.patchePublisher.sink { patch in
+        var cancellables: Set<AnyCancellable> = []
+        text.patchPublisher.sink { patch in
             receivedPatches.append(patch)
-        }
+        }.store(in: &cancellables)
         let string = "😀👮🏿‍♀️"
         let middleIndex = string.index(after: string.startIndex)
         text.string = "😀👮🏿‍♀️"

@@ -41,7 +41,7 @@ extension Document {
         return objectPatchSubjects![id]!.eraseToAnyPublisher()
     }
     
-    public func patchPublisher(for list: List) -> AnyPublisher<List.Patch, Never> {
+    func patchPublisher(for list: List) -> AnyPublisher<List.Patch, Never> {
         sync {
             if let publisher = listPatchPublishers?[list.id] {
                 return publisher
