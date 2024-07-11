@@ -42,7 +42,7 @@ extension Document {
     }
     
     func patchPublisher(for list: List) -> AnyPublisher<List.Patch, Never> {
-        sync {
+        recursiveLock {
             if let publisher = listPatchPublishers?[list.id] {
                 return publisher
             }
@@ -82,7 +82,7 @@ extension Document {
     }
     
     func patchPublisher(for map: Map) -> AnyPublisher<Map.Patch, Never> {
-        sync {
+        recursiveLock {
             if let publisher = mapPatchPublishers?[map.id] {
                 return publisher
             }
@@ -127,7 +127,7 @@ extension Document {
     }
     
     func patchPublisher(for text: Text) -> AnyPublisher<Text.Patch, Never> {
-        sync {
+        recursiveLock {
             if let publisher = textPatchPublishers?[text.id] {
                 return publisher
             }
