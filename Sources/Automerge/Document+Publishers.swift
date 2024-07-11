@@ -8,13 +8,9 @@ extension Document {
             return
         }
 
-        let newHeads = Set(self.doc.wrapErrors { $0.heads().map { ChangeHash(bytes: $0) } })
-        
-        let patches = self.doc.wrapErrors { doc in
-            doc.difference(before: newHeads.map(\.bytes), after: publishedHeads.map(\.bytes))
-        }.map { Patch($0) }
+        let patches = difference(since: publishedHeads!)
 
-        publishedHeads = newHeads
+        publishedHeads = heads()
 
         guard !patches.isEmpty else {
             return
@@ -36,7 +32,10 @@ extension Document {
         if let publisher = objectPatchSubjects?[id] {
             return publisher.eraseToAnyPublisher()
         }
+        
         if objectPatchSubjects == nil { objectPatchSubjects = .init() }
+        if publishedHeads == nil { publishedHeads = heads() }
+
         objectPatchSubjects![id] = .init()
         return objectPatchSubjects![id]!.eraseToAnyPublisher()
     }

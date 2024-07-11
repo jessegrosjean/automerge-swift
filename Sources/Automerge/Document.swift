@@ -26,7 +26,7 @@ public final class Document: @unchecked Sendable {
     var reportingLogLevel: LogVerbosity
     
     #if canImport(Combine)
-    var publishedHeads: Set<ChangeHash> = []
+    var publishedHeads: Set<ChangeHash>?
     var patchesSubject: PassthroughSubject<[Patch], Never>? = nil
     var objectPatchSubjects: [ObjId : PassthroughSubject<Patch, Never>]? = nil
     var listPatchPublishers: [ObjId : AnyPublisher<List.Patch, Never>]? = nil
@@ -35,7 +35,7 @@ public final class Document: @unchecked Sendable {
 
     public lazy var patchesPublisher: AnyPublisher<[Patch], Never> = {
         recursiveLock {
-            publishedHeads = heads()
+            publishedHeads = publishedHeads ?? heads()
             patchesSubject = .init()
             return patchesSubject!
                 .share()

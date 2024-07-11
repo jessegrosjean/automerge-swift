@@ -7,11 +7,17 @@ class ObjectTypeTests: XCTestCase {
     func testPutIntInMap() throws {
         let store = Document()
         let map = store.root
+        var receivedPatches: [Document.Map.Patch] = []
+        var cancellables: Set<AnyCancellable> = []
+        map.patchPublisher.sink { patch in
+            receivedPatches.append(patch)
+        }.store(in: &cancellables)
 
         XCTAssertEqual(map["key"], nil)
         map.put(.Int(1), key: "key")
         XCTAssertEqual(map["key"], .Scalar(.Int(1)))
         XCTAssertEqual(map.count, 1)
+        XCTAssertEqual(receivedPatches.count, 1)
     }
     
     func testEnsureListInMap() throws {
@@ -39,7 +45,7 @@ class ObjectTypeTests: XCTestCase {
         list.replaceSubrange(0..<2, with: [.Int(4)])
         XCTAssertEqual(list.count, 2)
         XCTAssertEqual(list.elements, [.Scalar(.Int(4)), .Scalar(.Int(3))])
-        XCTAssertEqual(receivedPatches.count, 2)
+        XCTAssertEqual(receivedPatches.count, 3)
     }
     
     func testTextReplaceRange() throws {
@@ -57,7 +63,7 @@ class ObjectTypeTests: XCTestCase {
         XCTAssertEqual(text.count, 6)
         text.replaceSubrange(string.startIndex..<middleIndex, with: "a")
         XCTAssertEqual(text.string, "a👮🏿‍♀️")
-        XCTAssertEqual(receivedPatches.count, 2)
+        XCTAssertEqual(receivedPatches.count, 3)
     }
     
 }
