@@ -27,6 +27,30 @@ public final class Document: @unchecked Sendable {
     #endif
 
     var reportingLogLevel: LogVerbosity
+    
+    #if canImport(Combine)
+    var publishedPatches: Set<ChangeHash> = []
+    var publishedPatchesSubject: PassthroughSubject<[Patch], Never>? = nil
+    
+    public lazy var patchesPublisher: AnyPublisher<[Patch], Never> = {
+        sync {
+            publishedPatches = heads()
+            publishedPatchesSubject = .init()
+            return publishedPatchesSubject!
+                .share()
+                .eraseToAnyPublisher()
+        }
+    }()
+
+    public lazy var patchesMainPublisher: AnyPublisher<[Patch], Never> = {
+        sync {
+            patchesPublisher
+                .receive(on: DispatchQueue.main)
+                .share()
+                .eraseToAnyPublisher()            
+        }
+    }()
+    #endif
 
     /// The actor ID of this document
     public var actor: ActorId {
@@ -46,7 +70,7 @@ public final class Document: @unchecked Sendable {
     /// - Parameter logLevel: The level at which to generate logs into unified logging from actions within this
     /// document.
     public init(logLevel: LogVerbosity = .errorOnly) {
-        doc = WrappedDoc(Doc())
+        self.doc = WrappedDoc(Doc())
         self.reportingLogLevel = logLevel
     }
 
@@ -61,7 +85,7 @@ public final class Document: @unchecked Sendable {
     ///   - bytes: A data buffer of encoded automerge changes.
     ///   - logLevel: The level at which to generate logs into unified logging from actions within this document.
     public init(_ bytes: Data, logLevel: LogVerbosity = .errorOnly) throws {
-        doc = try WrappedDoc { try Doc.load(bytes: Array(bytes)) }
+        self.doc = try WrappedDoc { try Doc.load(bytes: Array(bytes)) }
         self.reportingLogLevel = logLevel
     }
 
@@ -87,6 +111,7 @@ public final class Document: @unchecked Sendable {
             try self.doc.wrapErrors {
                 try $0.putInMap(obj: obj.bytes, key: key, value: value.toFfi())
             }
+            sendPatches()
         }
     }
 
@@ -110,6 +135,7 @@ public final class Document: @unchecked Sendable {
             try self.doc.wrapErrors {
                 try $0.putInList(obj: obj.bytes, index: index, value: value.toFfi())
             }
+            sendPatches()
         }
     }
 
@@ -123,9 +149,11 @@ public final class Document: @unchecked Sendable {
     public func putObject(obj: ObjId, key: String, ty: ObjType) throws -> ObjId {
         sendObjectWillChange()
         return try sync {
-            try self.doc.wrapErrors {
+            let r = try self.doc.wrapErrors {
                 try ObjId(bytes: $0.putObjectInMap(obj: obj.bytes, key: key, objType: ty.toFfi()))
             }
+            sendPatches()
+            return r
         }
     }
 
@@ -142,9 +170,11 @@ public final class Document: @unchecked Sendable {
     public func putObject(obj: ObjId, index: UInt64, ty: ObjType) throws -> ObjId {
         sendObjectWillChange()
         return try sync {
-            try self.doc.wrapErrors {
+            let r = try self.doc.wrapErrors {
                 try ObjId(bytes: $0.putObjectInList(obj: obj.bytes, index: index, objType: ty.toFfi()))
             }
+            sendPatches()
+            return r
         }
     }
 
@@ -160,6 +190,7 @@ public final class Document: @unchecked Sendable {
             try self.doc.wrapErrors {
                 try $0.insertInList(obj: obj.bytes, index: index, value: value.toFfi())
             }
+            sendPatches()
         }
     }
 
@@ -177,9 +208,11 @@ public final class Document: @unchecked Sendable {
     public func insertObject(obj: ObjId, index: UInt64, ty: ObjType) throws -> ObjId {
         sendObjectWillChange()
         return try sync {
-            try self.doc.wrapErrors {
+            let r = try self.doc.wrapErrors {
                 try ObjId(bytes: $0.insertObjectInList(obj: obj.bytes, index: index, objType: ty.toFfi()))
             }
+            sendPatches()
+            return r
         }
     }
 
@@ -193,6 +226,7 @@ public final class Document: @unchecked Sendable {
             try self.doc.wrapErrors {
                 try $0.deleteInMap(obj: obj.bytes, key: key)
             }
+            sendPatches()
         }
     }
 
@@ -209,6 +243,7 @@ public final class Document: @unchecked Sendable {
             try self.doc.wrapErrors {
                 try $0.deleteInList(obj: obj.bytes, index: index)
             }
+            sendPatches()
         }
     }
 
@@ -224,6 +259,7 @@ public final class Document: @unchecked Sendable {
             try self.doc.wrapErrors {
                 try $0.incrementInMap(obj: obj.bytes, key: key, by: by)
             }
+            sendPatches()
         }
     }
 
@@ -239,6 +275,7 @@ public final class Document: @unchecked Sendable {
             try self.doc.wrapErrors {
                 try $0.incrementInList(obj: obj.bytes, index: index, by: by)
             }
+            sendPatches()
         }
     }
 
@@ -544,7 +581,9 @@ public final class Document: @unchecked Sendable {
     public func cursor(obj: ObjId, position: UInt64) throws -> Cursor {
         sendObjectWillChange()
         return try sync {
-            try Cursor(bytes: self.doc.wrapErrors { try $0.cursor(obj: obj.bytes, position: position) })
+            let r = try Cursor(bytes: self.doc.wrapErrors { try $0.cursor(obj: obj.bytes, position: position) })
+            sendPatches()
+            return r
         }
     }
 
@@ -558,11 +597,13 @@ public final class Document: @unchecked Sendable {
     public func cursorAt(obj: ObjId, position: UInt64, heads: Set<ChangeHash>) throws -> Cursor {
         sendObjectWillChange() // this may not be correct
         return try sync {
-            try Cursor(bytes: self.doc.wrapErrors { try $0.cursorAt(
+            let r = try Cursor(bytes: self.doc.wrapErrors { try $0.cursorAt(
                 obj: obj.bytes,
                 position: position,
                 heads: heads.map(\.bytes)
             ) })
+            sendPatches()
+            return r
         }
     }
 
@@ -611,6 +652,7 @@ public final class Document: @unchecked Sendable {
                     obj: obj.bytes, start: start, delete: delete, values: values.map { $0.toFfi() }
                 )
             }
+            sendPatches()
         }
     }
 
@@ -659,6 +701,7 @@ public final class Document: @unchecked Sendable {
             try self.doc.wrapErrors {
                 try $0.spliceText(obj: obj.bytes, start: start, delete: delete, chars: value ?? "")
             }
+            sendPatches()
         }
     }
 
@@ -677,6 +720,7 @@ public final class Document: @unchecked Sendable {
             try self.doc.wrapErrors { doc in
                 try doc.updateText(obj: obj.bytes, chars: value)
             }
+            sendPatches()
         }
     }
 
@@ -739,6 +783,7 @@ public final class Document: @unchecked Sendable {
                     value: value.toFfi()
                 )
             }
+            sendPatches()
         }
     }
 
@@ -868,6 +913,7 @@ public final class Document: @unchecked Sendable {
             self.doc.wrapErrors {
                 $0.commitWith(msg: message, time: Int64(timestamp.timeIntervalSince1970))
             }
+            sendPatches()
         }
     }
 
@@ -880,9 +926,11 @@ public final class Document: @unchecked Sendable {
     public func save() -> Data {
         sendObjectWillChange()
         return sync {
-            self.doc.wrapErrors {
+            let r = self.doc.wrapErrors {
                 Data($0.save())
             }
+            sendPatches()
+            return r
         }
     }
 
@@ -920,6 +968,7 @@ public final class Document: @unchecked Sendable {
             try self.doc.wrapErrors {
                 try $0.receiveSyncMessage(state: state.ffi_state, msg: Array(message))
             }
+            sendPatches()
         }
     }
 
@@ -936,7 +985,9 @@ public final class Document: @unchecked Sendable {
             let patches = try self.doc.wrapErrors {
                 try $0.receiveSyncMessageWithPatches(state: state.ffi_state, msg: Array(message))
             }
-            return patches.map { Patch($0) }
+            let r = patches.map { Patch($0) }
+            sendPatches()
+            return r
         }
     }
 
@@ -972,6 +1023,7 @@ public final class Document: @unchecked Sendable {
         sendObjectWillChange()
         try sync {
             try self.doc.wrapErrorsWithOther(other: other.doc) { try $0.merge(other: $1) }
+            sendPatches()
         }
     }
 
@@ -985,7 +1037,9 @@ public final class Document: @unchecked Sendable {
             let patches = try self.doc.wrapErrorsWithOther(other: other.doc) {
                 try $0.mergeWithPatches(other: $1)
             }
-            return patches.map { Patch($0) }
+            let r = patches.map { Patch($0) }
+            sendPatches()
+            return r
         }
     }
 
@@ -1145,6 +1199,7 @@ public final class Document: @unchecked Sendable {
             try self.doc.wrapErrors {
                 try $0.applyEncodedChanges(changes: Array(encoded))
             }
+            sendPatches()
         }
     }
 
@@ -1162,7 +1217,9 @@ public final class Document: @unchecked Sendable {
             let patches = try self.doc.wrapErrors {
                 try $0.applyEncodedChangesWithPatches(changes: Array(encoded))
             }
-            return patches.map { Patch($0) }
+            let r = patches.map { Patch($0) }
+            sendPatches()
+            return r
         }
     }
 }
@@ -1202,7 +1259,22 @@ struct WrappedDoc {
 import Combine
 import OSLog
 
+extension Document {
+    
+    fileprivate func sendPatches() {
+        guard let subject = publishedPatchesSubject else {
+            return
+        }
+
+        let patches = difference(since: publishedPatches)
+        publishedPatches = heads()
+        subject.send(patches)
+    }
+    
+}
+
 extension Document: ObservableObject {
+    
     fileprivate func sendObjectWillChange() {
         // DEBUGGING / DIAGNOSTICS CODE to show where object changes are being initiated
 //        #if canImport(os)
@@ -1226,6 +1298,7 @@ extension Document: ObservableObject {
 }
 #else
 fileprivate extension Document {
-    func sendObjectWillChange() {}
+    fileprivate func sendPatches() {}
+    fileprivate func sendObjectWillChange() {}
 }
 #endif
