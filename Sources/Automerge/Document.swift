@@ -13,15 +13,15 @@ import Foundation
 /// In addition to working with the low-level methods, this library provides ``AutomergeEncoder`` and
 /// ``AutomergeDecoder``, which provide support for mapping your own `Codable` types into an Automerge document.
 public final class Document: @unchecked Sendable {
-    private var doc: WrappedDoc
+    var doc: WrappedDoc
 
     #if !os(WASI)
     fileprivate let queue = DispatchQueue(label: "automerge-sync-queue", qos: .userInteractive)
-    fileprivate func sync<T>(execute work: () throws -> T) rethrows -> T {
+    func sync<T>(execute work: () throws -> T) rethrows -> T {
         try queue.sync(execute: work)
     }
     #else
-    fileprivate func sync<T>(execute work: () throws -> T) rethrows -> T {
+    func sync<T>(execute work: () throws -> T) rethrows -> T {
         try work()
     }
     #endif
@@ -29,29 +29,28 @@ public final class Document: @unchecked Sendable {
     var reportingLogLevel: LogVerbosity
     
     #if canImport(Combine)
-    var publishedPatches: Set<ChangeHash> = []
-    var publishedPatchesSubject: PassthroughSubject<[Patch], Never>? = nil
-    
+    var publishedHeads: Set<ChangeHash> = []
+    var patchesSubject: PassthroughSubject<[Patch], Never>? = nil
+    var objectPatchSubjects: [ObjId : PassthroughSubject<Patch, Never>]? = nil
+    var listPatchPublishers: [ObjId : AnyPublisher<List.Patch, Never>]? = nil
+    var mapPatchPublishers: [ObjId : AnyPublisher<Map.Patch, Never>]? = nil
+    var textPatchPublishers: [ObjId : AnyPublisher<Text.Patch, Never>]? = nil
+
     public lazy var patchesPublisher: AnyPublisher<[Patch], Never> = {
         sync {
-            publishedPatches = heads()
-            publishedPatchesSubject = .init()
-            return publishedPatchesSubject!
+            publishedHeads = heads()
+            patchesSubject = .init()
+            return patchesSubject!
                 .share()
                 .eraseToAnyPublisher()
         }
     }()
-
-    public lazy var patchesMainPublisher: AnyPublisher<[Patch], Never> = {
-        sync {
-            patchesPublisher
-                .receive(on: DispatchQueue.main)
-                .share()
-                .eraseToAnyPublisher()            
-        }
-    }()
     #endif
 
+    public var root: Map {
+        .init(id: .ROOT, doc: self)
+    }
+    
     /// The actor ID of this document
     public var actor: ActorId {
         get {
@@ -1259,20 +1258,6 @@ struct WrappedDoc {
 import Combine
 import OSLog
 
-extension Document {
-    
-    fileprivate func sendPatches() {
-        guard let subject = publishedPatchesSubject else {
-            return
-        }
-
-        let patches = difference(since: publishedPatches)
-        publishedPatches = heads()
-        subject.send(patches)
-    }
-    
-}
-
 extension Document: ObservableObject {
     
     fileprivate func sendObjectWillChange() {
@@ -1298,7 +1283,6 @@ extension Document: ObservableObject {
 }
 #else
 fileprivate extension Document {
-    fileprivate func sendPatches() {}
     fileprivate func sendObjectWillChange() {}
 }
 #endif

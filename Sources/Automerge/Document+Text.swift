@@ -1,4 +1,6 @@
+#if canImport(Combine)
 import Combine
+#endif
 
 extension Document {
     
@@ -13,6 +15,11 @@ extension Document {
         }
         public let id: ObjId
         public var doc: Document
+        #if canImport(Combine)
+        public var patchePublisher: AnyPublisher<Patch, Never> {
+            doc.patchPublisher(for: self)
+        }
+        #endif
     }
 
 }
