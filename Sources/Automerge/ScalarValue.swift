@@ -121,3 +121,70 @@ extension ScalarValue: CustomStringConvertible {
         }
     }
 }
+
+extension ScalarValue {
+    
+    public var bytesValue: Data? {
+        if case .Bytes(let data) = self {
+            return data
+        }
+        return nil
+    }
+    
+    public var stringValue: String? {
+        if case .String(let string) = self {
+            return string
+        }
+        return nil
+    }
+    
+    public var uintValue: UInt64? {
+        if case .Uint(let uint) = self {
+            return uint
+        }
+        return nil
+    }
+    
+    public var intValue: Int64? {
+        if case .Int(let int) = self {
+            return int
+        }
+        return nil
+    }
+    
+    public var doubleValue: Double? {
+        if case .F64(let double) = self {
+            return double
+        }
+        return nil
+    }
+    
+    public var counterValue: Int64? {
+        if case .Counter(let int) = self {
+            return int
+        }
+        return nil
+    }
+    
+    public var dateValue: Date? {
+        if case .Timestamp(let date) = self {
+            return date
+        }
+        return nil
+    }
+    
+    public var boolValue: Bool? {
+        if case .Boolean(let bool) = self {
+            return bool
+        }
+        return nil
+    }
+    
+    public var nullValue: NSNull? {
+        if case .Null = self {
+            return NSNull()
+        }
+        return nil
+    }
+    
+}

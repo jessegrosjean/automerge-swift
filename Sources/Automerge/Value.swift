@@ -1,3 +1,5 @@
+import Foundation
+
 import enum AutomergeUniffi.Value
 
 typealias FfiValue = AutomergeUniffi.Value
@@ -28,4 +30,36 @@ extension Value: CustomDebugStringConvertible {
             return "ScalarValue<\(scalarValue)>"
         }
     }
+}
+
+extension Value {
+
+    public var scalarValue: ScalarValue? {
+        if case .Scalar(let scalar) = self {
+            return scalar
+        }
+        return nil
+    }
+    
+    public func listValue(in document: Document) -> Document.List? {
+        if case .Object(let id, .List) = self {
+            return .init(id: id, doc: document)
+        }
+        return nil
+    }
+
+    public func mapValue(in document: Document) -> Document.Map? {
+        if case .Object(let id, .Map) = self {
+            return .init(id: id, doc: document)
+        }
+        return nil
+    }
+
+    public func textValue(in document: Document) -> Document.Text? {
+        if case .Object(let id, .Text) = self {
+            return .init(id: id, doc: document)
+        }
+        return nil
+    }
+
 }
