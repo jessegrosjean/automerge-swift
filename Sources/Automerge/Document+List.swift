@@ -16,7 +16,7 @@ extension Document {
         public let id: ObjId
         public var doc: Document
         #if canImport(Combine)
-        public var patchPublisher: AnyPublisher<Patch, Never> {
+        public var patchPublisher: AnyPublisher<[Patch], Never> {
             doc.patchPublisher(for: self)
         }
         #endif

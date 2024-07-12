@@ -27,11 +27,14 @@ public final class Document: @unchecked Sendable {
     
     #if canImport(Combine)
     var publishedHeads: Set<ChangeHash>?
+    var changeCount: Int = 0
+    var pendingPatchs: [Patch] = []
+    var pendingObjectPatchs: [Patch] = []
     var patchesSubject: PassthroughSubject<[Patch], Never>? = nil
-    var objectPatchSubjects: [ObjId : PassthroughSubject<Patch, Never>]? = nil
-    var listPatchPublishers: [ObjId : AnyPublisher<List.Patch, Never>]? = nil
-    var mapPatchPublishers: [ObjId : AnyPublisher<Map.Patch, Never>]? = nil
-    var textPatchPublishers: [ObjId : AnyPublisher<Text.Patch, Never>]? = nil
+    var objectPatchSubjects: [ObjId : PassthroughSubject<[Patch], Never>]? = nil
+    var listPatchPublishers: [ObjId : AnyPublisher<[List.Patch], Never>]? = nil
+    var mapPatchPublishers: [ObjId : AnyPublisher<[Map.Patch], Never>]? = nil
+    var textPatchPublishers: [ObjId : AnyPublisher<[Text.Patch], Never>]? = nil
 
     public lazy var patchesPublisher: AnyPublisher<[Patch], Never> = {
         recursiveLock {
@@ -42,6 +45,19 @@ public final class Document: @unchecked Sendable {
                 .eraseToAnyPublisher()
         }
     }()
+    
+    public func groupChanges<T>(work: () throws -> T) rethrows -> T {
+        try recursiveLock {
+            changeCount += 1
+            defer {
+                changeCount -= 1
+                if changeCount == 0 {
+                    sendPatches()
+                }
+            }
+            return try work()
+        }
+    }
     #endif
 
     public var root: Map {
