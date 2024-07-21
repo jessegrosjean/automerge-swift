@@ -29,7 +29,29 @@ public final class Document: @unchecked Sendable {
     #endif
     
     #if canImport(Combine)
-    public let objectDidChange: PassthroughSubject<(), Never> = .init()
+    private let objectDidChangeSubject: PassthroughSubject<(), Never> = .init()
+
+    /// A publisher that emits after the object has changed.
+    ///
+    /// This publisher and ``objectWillChange()`` are always paired. Unlike that
+    /// publisher, this one fires after the document update is complete, allowing you to
+    /// read any changed values.
+    ///
+    /// An example that uses this publisher to observe granular patch changes:
+    ///
+    /// ```swift
+    /// var observedHeads = doc.heads()
+    /// doc.objectDidChange.sink {
+    ///     let changes = doc.difference(since: observedHeads)
+    ///     observedHeads = doc.heads()
+    ///     if !changes.isEmpty {
+    ///         processChanges(changes)
+    ///     }
+    /// }.store(in: &cancellables)
+    /// ```
+    public lazy var objectDidChange: AnyPublisher<(), Never> = {
+        objectDidChangeSubject.eraseToAnyPublisher()
+    }()
     #endif
 
     var reportingLogLevel: LogVerbosity
@@ -1254,7 +1276,7 @@ extension Document: ObservableObject {
         objectWillChange.send()
     }
     fileprivate func sendObjectDidChange() {
-        objectDidChange.send()
+        objectDidChangeSubject.send()
     }
 }
 #else
